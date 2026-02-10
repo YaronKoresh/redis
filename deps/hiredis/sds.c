@@ -886,7 +886,7 @@ hisds hi_sdscatrepr(hisds s, const char *p, size_t len) {
         case '\a': s = hi_sdscatlen(s,"\\a",2); break;
         case '\b': s = hi_sdscatlen(s,"\\b",2); break;
         default:
-            if (isprint(*p))
+            if (isprint((unsigned char)*p))
                 s = hi_sdscatprintf(s,"%c",*p);
             else
                 s = hi_sdscatprintf(s,"\\x%02x",(unsigned char)*p);
