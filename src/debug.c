@@ -2420,6 +2420,7 @@ void doFastMemoryTest(void) {
 /* Scans the (assumed) x86 code starting at addr, for a max of `len`
  * bytes, searching for E8 (callq) opcodes, and dumping the symbols
  * and the call offset if they appear to be valid. */
+#if defined(HAVE_BACKTRACE) && (defined(__linux__) || defined(__APPLE__))
 void dumpX86Calls(void *addr, size_t len) {
     size_t j;
     unsigned char *p = addr;
@@ -2474,6 +2475,17 @@ void dumpCodeAroundEIP(void *eip) {
         }
     }
 }
+#else
+/* Fallback stubs for platforms without dladdr support (e.g., Windows/MinGW) */
+void dumpX86Calls(void *addr, size_t len) {
+    UNUSED(addr);
+    UNUSED(len);
+}
+
+void dumpCodeAroundEIP(void *eip) {
+    UNUSED(eip);
+}
+#endif
 
 void invalidFunctionWasCalled(void) {}
 
