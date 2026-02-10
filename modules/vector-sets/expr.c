@@ -238,7 +238,7 @@ void exprStackReset(exprstack *stack) {
 /* =========================== Expression compilation ======================= */
 
 void exprConsumeSpaces(exprstate *es) {
-    while(es->p[0] && isspace(es->p[0])) es->p++;
+    while(es->p[0] && isspace(es->(unsigned char)p[0])) es->p++;
 }
 
 /* Parse an operator or a literal (just "null" currently).
@@ -249,7 +249,7 @@ exprtoken *exprParseOperatorOrLiteral(exprstate *es) {
     char *start = es->p;
 
     while(es->p[0] &&
-          (isalpha(es->p[0]) ||
+          (isalpha(es->(unsigned char)p[0]) ||
            strchr(EXPR_OP_SPECIALCHARS,es->p[0]) != NULL))
     {
         es->p++;
@@ -311,7 +311,7 @@ exprtoken *exprParseNumber(exprstate *es) {
     exprtoken *t = exprNewToken(EXPR_TOKEN_NUM);
     char num[256];
     int idx = 0;
-    while(isdigit(es->p[0]) || es->p[0] == '.' || es->p[0] == 'e' ||
+    while(isdigit(es->(unsigned char)p[0]) || es->p[0] == '.' || es->p[0] == 'e' ||
           es->p[0] == 'E' || (idx == 0 && es->p[0] == '-'))
     {
         if (idx >= (int)sizeof(num)-1) {
@@ -386,7 +386,7 @@ exprtoken *exprParseTuple(exprstate *es) {
 
         /* Parse tuple element. */
         exprtoken *ele = NULL;
-        if (isdigit(es->p[0]) || es->p[0] == '-') {
+        if (isdigit(es->(unsigned char)p[0]) || es->p[0] == '-') {
             ele = exprParseNumber(es);
         } else if (es->p[0] == '"' || es->p[0] == '\'') {
             ele = exprParseString(es);
@@ -467,8 +467,8 @@ int exprTokenize(exprstate *es, int *errpos) {
         exprtoken *current = NULL;
         if (*es->p == '\0') {
             current = exprNewToken(EXPR_TOKEN_EOF);
-        } else if (isdigit(*es->p) ||
-                  (minus_is_number && *es->p == '-' && isdigit(es->p[1])))
+        } else if (isdigit((unsigned char)*es->p) ||
+                  (minus_is_number && *es->p == '-' && isdigit(es->(unsigned char)p[1])))
         {
             current = exprParseNumber(es);
         } else if (*es->p == '"' || *es->p == '\'') {
@@ -477,7 +477,7 @@ int exprTokenize(exprstate *es, int *errpos) {
             current = exprParseSelector(es);
         } else if (*es->p == '[') {
             current = exprParseTuple(es);
-        } else if (isalpha(*es->p) || strchr(EXPR_OP_SPECIALCHARS, *es->p)) {
+        } else if (isalpha((unsigned char)*es->p) || strchr(EXPR_OP_SPECIALCHARS, *es->p)) {
             current = exprParseOperatorOrLiteral(es);
         }
 

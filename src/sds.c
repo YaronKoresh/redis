@@ -996,7 +996,7 @@ int sdsneedsrepr(const sds s) {
 
     while (len--) {
         if (*p == '\\' || *p == '"' || *p == '\n' || *p == '\r' ||
-            *p == '\t' || *p == '\a' || *p == '\b' || !isprint(*p) || isspace(*p)) return 1;
+            *p == '\t' || *p == '\a' || *p == '\b' || !isprint((unsigned char)*p) || isspace((unsigned char)*p)) return 1;
         p++;
     }
 
@@ -1061,7 +1061,7 @@ sds *sdssplitargs(const char *line, int *argc) {
     *argc = 0;
     while(1) {
         /* skip blanks */
-        while(*p && isspace(*p)) p++;
+        while(*p && isspace((unsigned char)*p)) p++;
         if (*p) {
             /* get a token */
             int inq=0;  /* set to 1 if we are in "quotes" */
@@ -1097,7 +1097,7 @@ sds *sdssplitargs(const char *line, int *argc) {
                     } else if (*p == '"') {
                         /* closing quote must be followed by a space or
                          * nothing at all. */
-                        if (*(p+1) && !isspace(*(p+1))) goto err;
+                        if (*(p+1) && !isspace((unsigned char)*(p+1))) goto err;
                         done=1;
                     } else if (!*p) {
                         /* unterminated quotes */
@@ -1112,7 +1112,7 @@ sds *sdssplitargs(const char *line, int *argc) {
                     } else if (*p == '\'') {
                         /* closing quote must be followed by a space or
                          * nothing at all. */
-                        if (*(p+1) && !isspace(*(p+1))) goto err;
+                        if (*(p+1) && !isspace((unsigned char)*(p+1))) goto err;
                         done=1;
                     } else if (!*p) {
                         /* unterminated quotes */
