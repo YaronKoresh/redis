@@ -38,6 +38,16 @@ endif
 DEPENDENCY_TARGETS=hiredis linenoise lua hdr_histogram fpconv fast_float xxhash
 NODEPS:=clean distclean
 
+# Dependency library paths
+HIREDIS_LIB=../deps/hiredis/libhiredis.a
+HIREDIS_SSL_LIB=../deps/hiredis/libhiredis_ssl.a
+LUA_LIB=../deps/lua/src/liblua.a
+HDR_HISTOGRAM_LIB=../deps/hdr_histogram/libhdrhistogram.a
+FPCONV_LIB=../deps/fpconv/libfpconv.a
+FAST_FLOAT_LIB=../deps/fast_float/libfast_float.a
+XXHASH_LIB=../deps/xxhash/libxxhash.a
+LINENOISE_OBJ=../deps/linenoise/linenoise.o
+
 # Default settings
 STD=-pedantic -DREDIS_STATIC=''
 
@@ -321,10 +331,14 @@ endif
 BUILD_NO:=0
 BUILD_YES:=1
 BUILD_MODULE:=2
+
+# TLS dependency prerequisites
+TLS_DEPS=
 ifeq ($(BUILD_TLS),yes)
 	FINAL_CFLAGS+=-DUSE_OPENSSL=$(BUILD_YES) $(OPENSSL_CFLAGS) -DBUILD_TLS_MODULE=$(BUILD_NO)
 	FINAL_LDFLAGS+=$(OPENSSL_LDFLAGS)
-	FINAL_LIBS += ../deps/hiredis/libhiredis_ssl.a $(LIBSSL_LIBS) $(LIBCRYPTO_LIBS)
+	FINAL_LIBS += $(HIREDIS_SSL_LIB) $(LIBSSL_LIBS) $(LIBCRYPTO_LIBS)
+	TLS_DEPS=$(HIREDIS_SSL_LIB)
 endif
 
 TLS_MODULE=
@@ -332,9 +346,10 @@ TLS_MODULE_NAME:=redis-tls$(PROG_SUFFIX).so
 TLS_MODULE_CFLAGS:=$(FINAL_CFLAGS)
 ifeq ($(BUILD_TLS),module)
 	FINAL_CFLAGS+=-DUSE_OPENSSL=$(BUILD_MODULE) $(OPENSSL_CFLAGS)
-	TLS_CLIENT_LIBS = ../deps/hiredis/libhiredis_ssl.a $(LIBSSL_LIBS) $(LIBCRYPTO_LIBS)
+	TLS_CLIENT_LIBS = $(HIREDIS_SSL_LIB) $(LIBSSL_LIBS) $(LIBCRYPTO_LIBS)
 	TLS_MODULE=$(TLS_MODULE_NAME)
 	TLS_MODULE_CFLAGS+=-DUSE_OPENSSL=$(BUILD_MODULE) $(OPENSSL_CFLAGS) -DBUILD_TLS_MODULE=$(BUILD_MODULE)
+	TLS_DEPS=$(HIREDIS_SSL_LIB)
 endif
 
 ifneq ($(SKIP_VEC_SETS),yes)
@@ -440,9 +455,34 @@ ifneq ($(strip $(PREV_FINAL_LDFLAGS)), $(strip $(FINAL_LDFLAGS)))
 .make-prerequisites: persist-settings
 endif
 
+# Build dependency libraries
+$(HIREDIS_LIB):
+	$(MAKE) -C ../deps hiredis
+
+$(HIREDIS_SSL_LIB):
+	$(MAKE) -C ../deps hiredis
+
+$(LUA_LIB):
+	$(MAKE) -C ../deps lua
+
+$(HDR_HISTOGRAM_LIB):
+	$(MAKE) -C ../deps hdr_histogram
+
+$(FPCONV_LIB):
+	$(MAKE) -C ../deps fpconv
+
+$(FAST_FLOAT_LIB):
+	$(MAKE) -C ../deps fast_float
+
+$(XXHASH_LIB):
+	$(MAKE) -C ../deps xxhash
+
+$(LINENOISE_OBJ):
+	$(MAKE) -C ../deps linenoise
+
 # redis-server
-$(REDIS_SERVER_NAME): $(REDIS_SERVER_OBJ) $(REDIS_VEC_SETS_OBJ)
-	$(REDIS_LD) -o $@ $^ ../deps/hiredis/libhiredis.a ../deps/lua/src/liblua.a ../deps/hdr_histogram/libhdrhistogram.a ../deps/fpconv/libfpconv.a ../deps/fast_float/libfast_float.a ../deps/xxhash/libxxhash.a $(FINAL_LIBS)
+$(REDIS_SERVER_NAME): $(REDIS_SERVER_OBJ) $(REDIS_VEC_SETS_OBJ) $(HIREDIS_LIB) $(LUA_LIB) $(HDR_HISTOGRAM_LIB) $(FPCONV_LIB) $(FAST_FLOAT_LIB) $(XXHASH_LIB) $(TLS_DEPS)
+	$(REDIS_LD) -o $@ $^ $(FINAL_LIBS)
 
 # redis-sentinel
 $(REDIS_SENTINEL_NAME): $(REDIS_SERVER_NAME)
@@ -461,12 +501,12 @@ $(TLS_MODULE_NAME): $(REDIS_SERVER_NAME)
 	$(QUIET_CC)$(CC) -o $@ tls.c -shared -fPIC $(TLS_MODULE_CFLAGS) $(TLS_CLIENT_LIBS)
 
 # redis-cli
-$(REDIS_CLI_NAME): $(REDIS_CLI_OBJ)
-	$(REDIS_LD) -o $@ $^ ../deps/hiredis/libhiredis.a ../deps/linenoise/linenoise.o ../deps/hdr_histogram/libhdrhistogram.a $(FINAL_LIBS) $(TLS_CLIENT_LIBS)
+$(REDIS_CLI_NAME): $(REDIS_CLI_OBJ) $(HIREDIS_LIB) $(LINENOISE_OBJ) $(HDR_HISTOGRAM_LIB) $(TLS_DEPS)
+	$(REDIS_LD) -o $@ $^ $(FINAL_LIBS) $(TLS_CLIENT_LIBS)
 
 # redis-benchmark
-$(REDIS_BENCHMARK_NAME): $(REDIS_BENCHMARK_OBJ)
-	$(REDIS_LD) -o $@ $^ ../deps/hiredis/libhiredis.a ../deps/hdr_histogram/libhdrhistogram.a $(FINAL_LIBS) $(TLS_CLIENT_LIBS)
+$(REDIS_BENCHMARK_NAME): $(REDIS_BENCHMARK_OBJ) $(HIREDIS_LIB) $(HDR_HISTOGRAM_LIB) $(TLS_DEPS)
+	$(REDIS_LD) -o $@ $^ $(FINAL_LIBS) $(TLS_CLIENT_LIBS)
 
 DEP = $(REDIS_SERVER_OBJ:%.o=%.d) $(REDIS_VEC_SETS_OBJ:%.o=%.d) $(REDIS_CLI_OBJ:%.o=%.d) $(REDIS_BENCHMARK_OBJ:%.o=%.d)
 -include $(DEP)
