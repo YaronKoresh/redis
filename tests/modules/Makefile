@@ -99,7 +99,7 @@ all: $(TEST_MODULES)
 	$(CC) -I../../src $(CFLAGS) $(SHOBJ_CFLAGS) -fPIC -c $< -o $@
 
 %.so: %.xo
-	$(LD) -o $@ $^ $(SHOBJ_LDFLAGS) $(LDFLAGS) $(LIBS)
+	$(CC) -o $@ $^ $(SHOBJ_LDFLAGS) $(LDFLAGS) $(LIBS)
 
 .PHONY: clean
 
