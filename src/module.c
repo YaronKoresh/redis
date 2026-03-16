@@ -3424,7 +3424,10 @@ int RM_ReplyWithCString(RedisModuleCtx *ctx, const char *buf) {
 int RM_ReplyWithString(RedisModuleCtx *ctx, RedisModuleString *str) {
     client *c = moduleGetReplyClient(ctx);
     if (c == NULL) return REDISMODULE_OK;
-    addReplyBulk(c,str);
+    /* Disable reply copy avoidance: the module string may belong to a datatype
+     * that could be lazy-freed by BIO thread, causing UAF if we hold a reference
+     * to it in the client reply list. */
+    addReplyBulkWithFlag(c,str,0);
     return REDISMODULE_OK;
 }
 
@@ -4742,6 +4745,8 @@ int RM_StringTruncate(RedisModuleKey *key, size_t newlen) {
         }
         if (server.memory_tracking_enabled)
             updateSlotAllocSize(key->db, getKeySlot(key->key->ptr), key->kv, oldsize, kvobjAllocSize(key->kv));
+        if (curlen != newlen)
+            updateKeysizesHist(key->db, getKeySlot(key->key->ptr), OBJ_STRING, curlen, newlen);
     }
     return REDISMODULE_OK;
 }
@@ -8008,6 +8013,7 @@ RedisModuleString *RM_SaveDataTypeToString(RedisModuleCtx *ctx, void *data, cons
         zfree(io.ctx);
     }
     if (io.error) {
+        sdsfree(payload.io.buffer.ptr);
         return NULL;
     } else {
         robj *str = createObject(OBJ_STRING,payload.io.buffer.ptr);
@@ -8684,9 +8690,9 @@ void RM_BlockClientSetPrivateData(RedisModuleBlockedClient *blocked_client, void
  * Note: Under normal circumstances RedisModule_UnblockClient should not be
  *       called for clients that are blocked on keys (Either the key will
  *       become ready or a timeout will occur). If for some reason you do want
- *       to call RedisModule_UnblockClient it is possible: Client will be
- *       handled as if it were timed-out (You must implement the timeout
- *       callback in that case).
+ *       to call RedisModule_UnblockClient it is possible, but it must NOT be
+ *       called from module threads and the client will be handled as if it
+ *       timed out (You must implement the timeout callback in that case).
  */
 RedisModuleBlockedClient *RM_BlockClientOnKeys(RedisModuleCtx *ctx, RedisModuleCmdFunc reply_callback,
                                                RedisModuleCmdFunc timeout_callback, void (*free_privdata)(RedisModuleCtx*,void*),
@@ -8756,7 +8762,8 @@ int moduleClientIsBlockedOnKeys(client *c) {
  * needs to be passed to the client, included but not limited some slow
  * to compute reply or some reply obtained via networking.
  *
- * Note 1: this function can be called from threads spawned by the module.
+ * Note 1: this function can be called from threads spawned by the module when
+ * the client was blocked using RedisModule_BlockClient().
  *
  * Note 2: when we unblock a client that is blocked for keys using the API
  * RedisModule_BlockClientOnKeys(), the privdata argument here is not used.
@@ -13577,7 +13584,8 @@ int setModuleStringConfig(ModuleConfig *config, sds strval, const char **err) {
 
 int setModuleEnumConfig(ModuleConfig *config, int val, const char **err) {
     RedisModuleString *error = NULL;
-    int return_code = config->set_fn.set_enum(config->name, val, config->privdata, &error);
+    char *rname = getRegisteredConfigName(config);
+    int return_code = config->set_fn.set_enum(rname, val, config->privdata, &error);
     propagateErrorString(error, err);
     return return_code == REDISMODULE_OK ? 1 : 0;
 }

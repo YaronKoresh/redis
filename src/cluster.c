@@ -284,6 +284,8 @@ void restoreCommand(client *c) {
             notifyKeyspaceEvent(NOTIFY_GENERIC,"del",key,c->db->id);
             server.dirty++;
         }
+        /* Update the stats, see setGenericCommand for details. */
+        server.stat_expiredkeys++;
         keyMetaSpecCleanup(&keymeta);
         decrRefCount(obj);
         addReply(c, shared.ok);
@@ -1268,6 +1270,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
             /* The command has keys and was checked for cross-slot between its keys in preprocessCommand() */
             if (pcmd->read_error == CLIENT_READ_CROSS_SLOT) {
                 /* Error: multiple keys from different slots. */
+                if (!use_cache_keys_result) getKeysFreeResult(&result);
                 if (error_code)
                     *error_code = CLUSTER_REDIR_CROSS_SLOT;
                 return NULL;
@@ -2117,12 +2120,13 @@ slotRangeArray *clusterGetLocalSlotRanges(void) {
  *
  * Usage: SFLUSH <start-slot> <end slot> [<start-slot> <end slot>]* [SYNC|ASYNC]
  *
- * This is an initial implementation of SFLUSH (slots flush) which is limited to
- * flushing a single shard as a whole, but in the future the same command may be
- * used to partially flush a shard based on hash slots. Currently only if provided
- * slots cover entirely the slots of a node, the node will be flushed and the
- * return value will be pairs of slot ranges. Otherwise, a single empty set will 
- * be returned. If possible, SFLUSH SYNC will be run as blocking ASYNC as an 
+ * Redis will flush the slots that belong to this node and reply with the flushed 
+ * slot ranges. If no slot is flushed, an empty array will be returned.
+ * 
+ * e.g. Node owns slot 100-200, user issues SFLUSH 50 150
+ * Redis will flush slot 100-150 and reply with [100,150]
+ * 
+ * If possible, SFLUSH SYNC will be run as blocking ASYNC as an 
  * optimization.
  */
 void sflushCommand(client *c) {
